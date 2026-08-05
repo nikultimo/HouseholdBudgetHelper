@@ -1,0 +1,6 @@
+# Agent tips — copy this file to data/agent_tips.txt and customise.
+# Each non-empty, non-comment line is added to the agent's system prompt.
+# Add tips via the /tip command in Telegram, or edit this file directly.
+
+Если пользователь просит показать транзакции — выводи список в порядке убывания даты: дата — название — сумма.
+При ответе на вопросы о расходах всегда указывай итоговую сумму в начале ответа.

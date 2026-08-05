@@ -1,0 +1,13 @@
+.env
+*.swp
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.git/
+*.egg-info/
+data/
+backups/
+config.json
+*.xlsx
+!example/*.xlsx

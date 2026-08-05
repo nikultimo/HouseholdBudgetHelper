@@ -1,0 +1,17 @@
+.env
+*.swp
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+.DS_Store
+config.json
+data/
+backups/
+*.xlsx
+!example/*.xlsx
+.worktrees/
+agent_tips.txt
+tests/eval/eval_budget.xlsx

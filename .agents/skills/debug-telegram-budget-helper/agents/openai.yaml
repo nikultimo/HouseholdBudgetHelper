@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug TelegramBudgetHelper"
+  short_description: "Diagnose bot replies, traces, logs, and tests"
+  default_prompt: "Use $debug-telegram-budget-helper to diagnose incorrect bot answers across routing, Langfuse traces, Docker logs, and tests."

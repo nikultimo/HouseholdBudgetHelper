@@ -1,0 +1,17 @@
+{
+  "model": "google/gemini-2.5-flash-preview",
+  "default_user": "User1",
+  "default_account": "Main Card",
+  "backup_keep": 30,
+  "confidence_threshold": 0.8,
+  "yadisk_path": "/Budget.xlsx",
+  "router_model": "google/gemini-2.5-flash-lite",
+  "vision_model": "google/gemini-2.5-flash",
+  "allowed_users": [123456789],
+  "salary_pay_days": [5, 20],
+  "salary_payment_model": "working_days",
+  "salary_payment_percentages": [0.5, 0.5],
+  "vacation_average_month_days": 29.3,
+  "vacation_ndfl_rate": 0.13,
+  "enable_unknown_code_executor": false
+}

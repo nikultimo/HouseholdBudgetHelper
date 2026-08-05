@@ -1,0 +1,18 @@
+[Unit]
+Description=Budget Telegram Bot
+After=network.target
+Wants=langfuse.service
+
+[Service]
+Type=simple
+User=budgetbot
+WorkingDirectory=/opt/telegram-budget-helper
+EnvironmentFile=/opt/telegram-budget-helper/.env
+ExecStart=/opt/telegram-budget-helper/.venv/bin/python /opt/telegram-budget-helper/bot.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+services:
+  budget-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    # Default: bridge networking. If Telegram is unreachable from inside the container
+    # (TLS handshake timeouts on VPS/VPN setups), switch to host networking instead:
+    #   network_mode: host
+    ports: []
+    volumes:
+      - ./config.json:/app/config.json
+      - ./data:/app/data
+      - ./backups:/app/backups
