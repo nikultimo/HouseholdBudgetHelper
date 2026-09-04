@@ -95,7 +95,7 @@ C4Component
     Component(config_mod, "config.py", "Python module", "Loads config.json + .env into a Config dataclass. Provides Config.update_model() for runtime model switching.")
 
     Component(llm_client, "llm/client.py — LLMClient", "Python class", "Wraps OpenRouter via openai.AsyncOpenAI. chat() for plain text, chat_structured() for Pydantic JSON output (instructor), chat_vision() for image+text, transcribe() for Whisper.")
-    Component(llm_router, "llm/router.py", "Python module", "Fast regex pre-classifier; falls back to LLM for ambiguous messages. Returns IntentClassification (13 intents).")
+    Component(llm_router, "llm/router.py", "Python module", "Fast regex pre-classifier; falls back to LLM for ambiguous messages. Returns IntentClassification (14 intents).")
     Component(llm_prompts, "llm/prompts.py", "Python module", "Prompt builders: build_transaction_prompt, build_analysis_prompt.")
     Component(llm_agent, "llm/agent.py", "Python module", "run_budget_agent(): tool-calling harness loop (max 6 turns, 15 tool calls, 45 s) with numeric-grounding and Telegram-HTML validation plus canonical fallback.")
     Component(llm_agent_tools, "llm/agent_tools.py", "Python module", "Read-only tool schemas/executors including analyze_cashflow and transparent estimate_leave_impact for paid/unpaid leave.")
@@ -147,7 +147,7 @@ C4Component
   Rel(dispatcher, llm_agent, "unsupported query / optimization_advice / general_financial_advice")
   Rel(dispatcher, h_edit, "intent=transaction_edit")
   Rel(dispatcher, h_search, "intent=transaction_search")
-  Rel(dispatcher, h_settings, "intent=salary_* / capital_* / payments_checklist")
+  Rel(dispatcher, h_settings, "intent=salary_* / capital_* / payments_checklist / mandatory_payment_add")
   Rel(bot_entry, h_salary, "/salary command")
   Rel(bot_entry, h_capital, "/update_capital command")
   Rel(bot_entry, h_stats, "/stats command")

@@ -17,6 +17,7 @@ class IntentClassification(BaseModel):
         "capital_query",
         "capital_update",
         "payments_checklist",
+        "mandatory_payment_add",
         "optimization_advice",
         "general_financial_advice",
         "transaction_search",
@@ -26,7 +27,23 @@ class IntentClassification(BaseModel):
     ]
     extracted_value: float | None = Field(
         default=None,
-        description="Numeric value for salary_update or capital_update",
+        description="Numeric value for salary_update, capital_update, or the amount for mandatory_payment_add",
+    )
+    payment_description: str | None = Field(
+        default=None,
+        description="Short name for the new recurring payment, for mandatory_payment_add",
+    )
+    payment_due_day: int | None = Field(
+        default=None,
+        description="Explicit day of month (1-31) for mandatory_payment_add, if stated",
+    )
+    payment_half: Literal["first", "second"] | None = Field(
+        default=None,
+        description=(
+            "Which salary half for mandatory_payment_add when no exact day is given: "
+            "'first' for the first half of the month (before the first salary payout), "
+            "'second' for the second half (before the second salary payout)"
+        ),
     )
 
 
@@ -80,7 +97,8 @@ def _fast_classify(text: str) -> IntentClassification | None:
     non_txn_words = (
         "сколько", "какой", "какая", "какие", "когда", "почему", "зачем", "как ",
         "что ", "измени", "обнови", "установи", "удали", "найди", "покажи",
-        "зарплат", "капитал", "платеж", "платёж",
+        "зарплат", "капитал", "платеж", "платёж", "ежемесячн", "каждый месяц",
+        "регулярн",
     )
     if any(w in low for w in non_txn_words):
         return None
@@ -98,6 +116,7 @@ Classify the user's message into exactly one intent:
 - capital_query: Asking about current total capital/savings. Examples: "сколько у меня денег?", "какой у меня капитал?"
 - capital_update: Changing the capital value. Extract the new amount into extracted_value. Examples: "измени капитал на 700000", "установи капитал 500000 рублей"
 - payments_checklist: Requesting a list of mandatory upcoming payments. Examples: "покажи обязательные платежи", "что нужно заплатить?", "чеклист платежей"
+- mandatory_payment_add: Adding a NEW recurring monthly mandatory payment to the payment schedule (not a one-time transaction). Extract the amount into extracted_value, a short name into payment_description, and either payment_due_day (an explicit day of month, 1-31) or payment_half ('first' for the first half of the month / before the first salary, 'second' for the second half / before the second salary) from phrases like "первая половина месяца", "до зарплаты", "вторая половина". Examples: "добавь ежемесячный платёж 5000 на парковку в первую половину месяца", "добавь платёж интернет 900 каждый месяц 10 числа", "новый обязательный платёж такси 3000 во вторую половину", "поставь регулярный платёж подписка 500 в первой половине"
 - optimization_advice: Asking for advice on saving money or optimizing personal spending. Examples: "как снизить траты?", "что можно оптимизировать в расходах?"
 - general_financial_advice: General questions about personal finance, investments, budgeting strategies, earning more — not requiring data from the user's spreadsheet. Examples: "как зарабатывать больше?", "куда вложить деньги?", "что такое ETF?", "как правильно инвестировать?", "стоит ли брать ипотеку?", "как сформировать подушку безопасности?"
 - transaction_search: Looking up or finding a specific past transaction by description or date — pure lookup, no aggregate amount requested. Examples: "найди транзакцию на кофе", "была ли трата на кафе Буханка?", "найди платёж от 5 мая"
@@ -106,6 +125,7 @@ Classify the user's message into exactly one intent:
 - unknown: Financial or data-related request that doesn't fit any of the above.
 
 For salary_update and capital_update, extract the numeric value into extracted_value (rubles, plain number).
+For mandatory_payment_add, extract the amount into extracted_value, the name into payment_description, and the timing into payment_due_day or payment_half.
 """
 
 

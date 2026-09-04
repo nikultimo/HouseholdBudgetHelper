@@ -72,3 +72,13 @@ Then restart Compose.
 ## Startup: missing Excel file
 
 If `BUDGET_FILE_PATH` does not exist on startup and the Yandex Disk download fails, the bot creates the file from `example/budget_example.xlsx` after template validation. The bot then starts in a degraded state — use the admin-only `/setup` command to populate real data and upload a proper workbook.
+
+---
+
+## Excel stylesheet is unreadable
+
+**Symptom:** a reply reports that the budget workbook cannot be read, or logs contain `Unable to read workbook: could not read stylesheet`.
+
+**Cause:** the `.xlsx` ZIP can be structurally intact while `xl/styles.xml` contains a style value unsupported by `openpyxl`. Transaction parsing reads categories from the workbook before contacting the LLM, so this is not an OpenRouter timeout.
+
+**Recovery:** keep the damaged file as evidence, validate the newest local backup in a temporary location, and restore it only if it opens with `openpyxl`. Then upload the restored workbook to Yandex Disk. Do not use `/sync` first: it downloads the remote copy. Current downloads are validated before they can replace a readable local runtime file.

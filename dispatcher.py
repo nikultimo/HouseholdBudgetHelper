@@ -41,6 +41,10 @@ _BALANCE_WORD_RE = re.compile(r"\b(?:денег|баланс|капитал|ос
 _NAMED_MONTH_RE = re.compile(rf"\b(?:{MONTH_ALTERNATION})\b", re.IGNORECASE)
 
 
+def _is_workbook_read_error(exc: Exception) -> bool:
+    return isinstance(exc, ValueError) and "workbook" in str(exc).casefold()
+
+
 def _is_named_date_balance_query(text: str) -> bool:
     if re.search(r"\b(?:измени|обнови|установи|сверь)\b", text, re.IGNORECASE):
         return False
@@ -76,6 +80,15 @@ async def handle_transaction_text(
         )
     except Exception as exc:
         logger.warning("parse_transaction failed: %s", type(exc).__name__)
+        if _is_workbook_read_error(exc):
+            await reply_to_update(
+                update,
+                context,
+                "⚠️ Не удалось прочитать книгу бюджета. Администратору нужно восстановить "
+                "валидную версию Excel и повторить синхронизацию.",
+                trace_ctx=trace_ctx,
+            )
+            return
         await reply_to_update(
             update,
             context,
@@ -288,6 +301,21 @@ async def dispatch(
             pay_days=cfg.salary_pay_days,
             payment_model=cfg.salary_payment_model,
             payment_percentages=cfg.salary_payment_percentages,
+            trace_ctx=trace_ctx,
+        )
+    elif intent == "mandatory_payment_add":
+        trace_ctx.set_metadata("route", "mandatory_payment_add")
+        await settings_cmd.cmd_mandatory_payment_add(
+            update,
+            context,
+            description=classification.payment_description,
+            amount=extracted,
+            due_day=classification.payment_due_day,
+            half=classification.payment_half,
+            reader=reader,
+            writer=writer,
+            yadisk=yadisk,
+            cfg=cfg,
             trace_ctx=trace_ctx,
         )
     elif intent == "general_financial_advice":

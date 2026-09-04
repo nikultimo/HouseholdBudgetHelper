@@ -227,3 +227,78 @@ async def cmd_payments_checklist(
     await reply_to_update(
         update, context, "\n".join(lines), parse_mode="HTML", trace_ctx=trace_ctx,
     )
+
+
+async def cmd_mandatory_payment_add(
+    update: "Update",
+    context: "ContextTypes.DEFAULT_TYPE",
+    description: str | None,
+    amount: float | None,
+    due_day: int | None,
+    half: str | None,
+    reader: "ExcelReader",
+    writer: "ExcelWriter",
+    yadisk: "YadiskSync",
+    cfg: "Config",
+    trace_ctx: "TraceContext | None" = None,
+) -> None:
+    example = (
+        "Например: <i>добавь ежемесячный платёж 5000 на парковку в первую половину месяца</i>."
+    )
+    if not description or not str(description).strip():
+        await reply_to_update(
+            update, context, f"Укажи название платежа. {example}",
+            parse_mode="HTML", trace_ctx=trace_ctx,
+        )
+        return
+    if not amount or amount <= 0:
+        await reply_to_update(
+            update, context, f"Укажи сумму платежа цифрами. {example}",
+            parse_mode="HTML", trace_ctx=trace_ctx,
+        )
+        return
+
+    resolved_half = half
+    if resolved_half not in ("first", "second"):
+        if due_day:
+            resolved_half = "first" if due_day <= cfg.salary_pay_days[0] else "second"
+        else:
+            await reply_to_update(
+                update,
+                context,
+                "Уточни, когда платить: в <b>первую</b> половину месяца (до "
+                f"{cfg.salary_pay_days[0]}-го числа) или во <b>вторую</b> (до "
+                f"{cfg.salary_pay_days[1]}-го), либо назови конкретное число месяца.",
+                parse_mode="HTML",
+                trace_ctx=trace_ctx,
+            )
+            return
+
+    try:
+        await asyncio.to_thread(
+            writer.add_mandatory_payment,
+            description=str(description).strip(),
+            amount=float(amount),
+            due_day=int(due_day or 0),
+            half=resolved_half,
+        )
+    except ValueError as exc:
+        await reply_to_update(update, context, f"⚠️ Не получилось добавить платёж: {exc}.", trace_ctx=trace_ctx)
+        return
+
+    reader.invalidate_cache()
+    try:
+        await yadisk.upload()
+    except Exception:
+        pass
+
+    half_phrase = "в первую" if resolved_half == "first" else "во вторую"
+    day_part = f", день ~{due_day}" if due_day else ""
+    await reply_to_update(
+        update,
+        context,
+        f"✅ Добавлен ежемесячный платёж: <b>{description}</b> — <b>{float(amount):,.0f} ₽</b> "
+        f"({half_phrase} половину месяца{day_part}).",
+        parse_mode="HTML",
+        trace_ctx=trace_ctx,
+    )
