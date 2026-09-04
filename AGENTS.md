@@ -84,5 +84,6 @@ Every Telegram update first passes a fail-closed `allowed_users` guard; unauthor
 - **Transaction amount guard:** a router `transaction` intent without a numeric amount must request clarification and must not call the transaction parser or create `_pending` state. Never allow a zero-value confirmation caused by a missing amount.
 - **Search clarification:** transaction search has no multi-turn pending context. If criteria are missing, ask the user to provide the complete search in one message; do not send the unsupported plan to the budget agent as if it could remember the next message.
 - **Pending state:** `_pending` dict in `bot.py` is in-process only — pending transactions are lost on restart.
+- **Yandex workbook downloads:** validate a downloaded workbook with `openpyxl` while it is still a temporary file; never replace a readable runtime ledger with an unreadable remote `.xlsx`.
 - **Tests fixture:** `example/budget_example.xlsx` is a test fixture — do not modify its schema or add real data.
 - **Code executor:** `enable_unknown_code_executor` defaults to `false`. Keep it disabled in production; unknown financial questions go to the budget agent instead.

@@ -1,5 +1,10 @@
-import pytest
+from io import BytesIO
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from zipfile import ZIP_DEFLATED, ZipFile
+
+import pytest
+
 from yadisk.sync import YadiskSync
 
 
@@ -19,12 +24,33 @@ def _make_client_ctx(mock_client: AsyncMock) -> MagicMock:
     return ctx
 
 
+def _workbook_with_invalid_alignment() -> bytes:
+    """Return a structurally valid XLSX whose style is rejected by openpyxl."""
+    source = Path("example/budget_example.xlsx")
+    output = BytesIO()
+    with ZipFile(source) as original, ZipFile(output, "w", ZIP_DEFLATED) as modified:
+        for info in original.infolist():
+            content = original.read(info.filename)
+            if info.filename == "xl/styles.xml":
+                content = content.replace(
+                    b'vertical="center"',
+                    b'vertical="invalid-value"',
+                    1,
+                )
+            modified.writestr(info, content)
+    return output.getvalue()
+
+
+def _valid_workbook() -> bytes:
+    return Path("example/budget_example.xlsx").read_bytes()
+
+
 @pytest.mark.asyncio
 async def test_download_calls_httpx(sync_obj, tmp_path):
     sync_obj.local_path = str(tmp_path / "test.xlsx")
 
     async def _chunks():
-        yield b"data"
+        yield _valid_workbook()
 
     mock_get_resp = MagicMock()
     mock_get_resp.json.return_value = {"href": "https://download-url"}
@@ -47,6 +73,39 @@ async def test_download_calls_httpx(sync_obj, tmp_path):
 
     mock_client.get.assert_awaited_once()
     mock_get_resp.raise_for_status.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_download_rejects_unreadable_workbook_without_replacing_local_file(sync_obj, tmp_path):
+    local = tmp_path / "test.xlsx"
+    original = b"known-local-content"
+    local.write_bytes(original)
+    sync_obj.local_path = str(local)
+
+    async def _chunks():
+        yield _workbook_with_invalid_alignment()
+
+    mock_get_resp = MagicMock()
+    mock_get_resp.json.return_value = {"href": "https://download-url"}
+    mock_get_resp.raise_for_status = MagicMock()
+    mock_stream_resp = MagicMock()
+    mock_stream_resp.raise_for_status = MagicMock()
+    mock_stream_resp.aiter_bytes.return_value = _chunks()
+    mock_stream_ctx = MagicMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_resp)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_get_resp)
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+
+    with (
+        patch("yadisk.sync.httpx.AsyncClient", return_value=_make_client_ctx(mock_client)),
+        pytest.raises(ValueError, match="not a readable Excel workbook"),
+    ):
+        await sync_obj.download()
+
+    assert local.read_bytes() == original
+    assert not (tmp_path / "test.xlsx.tmp").exists()
 
 
 @pytest.mark.asyncio

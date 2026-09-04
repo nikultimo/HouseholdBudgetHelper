@@ -2,11 +2,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+
 import httpx
+import openpyxl
 
 logger = logging.getLogger(__name__)
 
 _API = "https://cloud-api.yandex.net/v1/disk/resources"
+
+
+def _validate_downloaded_workbook(path: str) -> None:
+    """Reject an unreadable download before it can replace the runtime ledger."""
+    try:
+        with open(path, "rb") as workbook:
+            openpyxl.load_workbook(workbook, data_only=True, read_only=True)
+    except Exception as exc:
+        raise ValueError("Downloaded file is not a readable Excel workbook.") from exc
 
 
 class YadiskSync:
@@ -46,6 +57,7 @@ class YadiskSync:
                         await asyncio.to_thread(
                             lambda d=data: open(tmp_path, "wb").write(d)  # noqa: ASYNC230
                         )
+                    await asyncio.to_thread(_validate_downloaded_workbook, tmp_path)
                     os.replace(tmp_path, self.local_path)
                     return
                 except (httpx.TimeoutException, httpx.ConnectError) as exc:

@@ -1,6 +1,8 @@
-import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from llm.schemas import TransactionInput
 
 
@@ -84,6 +86,37 @@ async def test_parse_transaction_converts_usd(parsed_txn_usd):
     assert result.amount == 4500.0
     assert result.original_currency == "USD"
     assert result.original_amount == 50.0
+
+
+@pytest.mark.asyncio
+async def test_transaction_handler_reports_workbook_read_error_instead_of_model_timeout():
+    from dispatcher import handle_transaction_text
+
+    update = MagicMock()
+    update.message.chat.send_action = AsyncMock()
+    context = MagicMock()
+    reader = MagicMock()
+    reader.get_categories.side_effect = ValueError("Unable to read workbook")
+    llm_client = MagicMock()
+
+    with patch("dispatcher.reply_to_update", new_callable=AsyncMock) as reply:
+        await handle_transaction_text(
+            update,
+            context,
+            "3000 сервис",
+            "1",
+            "2026-09-04",
+            MagicMock(),
+            cfg=MagicMock(default_user="User1"),
+            reader=reader,
+            llm_client=llm_client,
+            pending={},
+        )
+
+    llm_client.chat_structured.assert_not_called()
+    reply.assert_awaited_once()
+    assert "книг" in reply.call_args.args[2].casefold()
+    assert "таймаут" not in reply.call_args.args[2].casefold()
 
 
 def test_confirmed_history_reuses_dominant_category_and_account(parsed_txn):
