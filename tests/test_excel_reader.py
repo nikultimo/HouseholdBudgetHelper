@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 import openpyxl
 
-from excel.constants import SHEET_CREDITS, SHEET_TRANSACTIONS
+from excel.constants import SHEET_CREDITS, SHEET_PAYMENTS, SHEET_TRANSACTIONS
 from excel.reader import ExcelReader
 
 SAMPLE_FILE = Path("example/budget_example.xlsx")
@@ -92,6 +92,44 @@ def test_get_credits_accepts_percent_rate_strings(reader):
     credits = reader.get_credits()
 
     assert credits[-1]["rate"] == pytest.approx(29.9)
+
+
+def test_get_mandatory_payments_accepts_currency_and_thousands_separator_strings(reader):
+    wb = openpyxl.load_workbook(reader.path)
+    ws = wb[SHEET_PAYMENTS]
+    last_row = ws.max_row
+    ws.cell(last_row + 1, 1).value = "Парковка"
+    ws.cell(last_row + 1, 2).value = 5
+    ws.cell(last_row + 1, 3).value = "5 000 руб"
+    wb.save(reader.path)
+    reader.invalidate_cache()
+
+    payments = reader.get_mandatory_payments()
+    all_payments = payments["first"] + payments["second"]
+    parking = next(p for p in all_payments if p["description"] == "Парковка")
+
+    assert parking["amount"] == pytest.approx(5000.0)
+    assert parking["due_day"] == 5
+
+
+def test_get_mandatory_payments_skips_unparseable_amount_without_crashing(reader, caplog):
+    wb = openpyxl.load_workbook(reader.path)
+    ws = wb[SHEET_PAYMENTS]
+    last_row = ws.max_row
+    # A formula cell has no cached value once written by openpyxl (data_only=True
+    # reads it back as None) -- this must be skipped, logged, and not crash the read.
+    ws.cell(last_row + 1, 1).value = "Сломанный платёж"
+    ws.cell(last_row + 1, 2).value = 5
+    ws.cell(last_row + 1, 3).value = "=5000"
+    wb.save(reader.path)
+    reader.invalidate_cache()
+
+    with caplog.at_level("WARNING"):
+        payments = reader.get_mandatory_payments()
+
+    all_payments = payments["first"] + payments["second"]
+    assert all("Сломанный платёж" != p["description"] for p in all_payments)
+    assert any("Сломанный платёж" in msg for msg in caplog.messages)
 
 
 def test_projected_capital_at_month_start_uses_only_completed_intervening_months():

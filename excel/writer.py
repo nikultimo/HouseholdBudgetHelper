@@ -14,6 +14,7 @@ from excel.constants import (
     LEDGER_COL_REVERSES_ID,
     SHEET_TRANSACTIONS,
     SHEET_CAPITAL,
+    SHEET_PAYMENTS,
     SHEET_SETTINGS,
 )
 from excel.ledger import (
@@ -360,6 +361,62 @@ class ExcelWriter:
     def delete_transaction_row(self, row_num: int) -> None:
         """Compatibility wrapper: preserve history by appending a reversal."""
         self.reverse_transaction(row_num)
+
+    def add_mandatory_payment(
+        self, *, description: str, amount: float, due_day: int, half: str,
+    ) -> int:
+        """Insert one recurring payment into an existing empty slot in 📅 Платежи.
+
+        Reuses a blank reserved row inside the target half's block (before its
+        'ИТОГО' row), so the sheet's own SUM formula picks it up automatically.
+        Never inserts/shifts rows or rewrites formulas: doing so would leave
+        other cross-references (e.g. the grand-total row) silently pointing at
+        stale row numbers. If the block has no free row, raises ValueError so
+        the caller can ask for manual editing instead.
+        """
+        wb = openpyxl.load_workbook(self.path)
+        ws = wb[SHEET_PAYMENTS]
+
+        separator_row: int | None = None
+        for row_idx in range(2, ws.max_row + 1):
+            value = ws.cell(row_idx, 1).value
+            if value and ("ВТОРАЯ ЗАРПЛАТА" in str(value) or "2️⃣" in str(value)):
+                separator_row = row_idx
+                break
+        if separator_row is None:
+            raise ValueError(f"В листе {SHEET_PAYMENTS} не найден разделитель 'ВТОРАЯ ЗАРПЛАТА'")
+
+        if half == "first":
+            block_start, block_end_limit = 2, separator_row - 1
+        else:
+            block_start, block_end_limit = separator_row + 1, ws.max_row
+
+        itogo_row: int | None = None
+        for row_idx in range(block_start, block_end_limit + 1):
+            value = ws.cell(row_idx, 1).value
+            if value and "ИТОГО" in str(value):
+                itogo_row = row_idx
+                break
+        if itogo_row is None:
+            raise ValueError(f"В листе {SHEET_PAYMENTS} не найдена строка 'ИТОГО' для этой половины")
+
+        target_row: int | None = None
+        for row_idx in range(block_start, itogo_row):
+            if all(ws.cell(row_idx, col).value is None for col in (1, 2, 3)):
+                target_row = row_idx
+                break
+        if target_row is None:
+            half_label = "первой" if half == "first" else "второй"
+            raise ValueError(
+                f"нет свободных строк в блоке {half_label} половины листа {SHEET_PAYMENTS} — "
+                "добавь платёж вручную в Excel"
+            )
+
+        ws.cell(target_row, 1).value = description
+        ws.cell(target_row, 2).value = due_day or None
+        ws.cell(target_row, 3).value = float(amount)
+        wb.save(self.path)
+        return target_row
 
     def update_setting(self, key: str, value: Any) -> None:
         """Update a key-value row in the Settings sheet. Raises KeyError if key not found."""

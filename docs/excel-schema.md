@@ -62,7 +62,11 @@ Credit rows start at **row 3**. Numeric fields tolerate spreadsheet strings like
 | B | Due day of month |
 | C | Amount |
 
-Rows start at **row 2**. The sheet is split into two sections by a row containing `"ВТОРАЯ ЗАРПЛАТА"` or `"2️⃣"` — this marks payments due after the second salary.
+Rows start at **row 2**. The sheet is split into two sections by a row containing `"ВТОРАЯ ЗАРПЛАТА"` or `"2️⃣"` — this marks payments due after the second salary. Each section ends at a row whose column A contains `"ИТОГО"`, typically holding a `SUM` formula over that section's amount column; the template reserves several blank rows before each `ИТОГО` row for new entries.
+
+`День`/`Сумма` cells are parsed tolerantly (plain numbers, comma decimals, spaces/NBSP as thousands separators, `₽`/`руб` suffixes — same tolerance as `💳 Кредиты`). A cell that still can't be parsed (for example a formula with no cached value, since the reader loads with `data_only=True`) is skipped and logged as a warning rather than silently dropped.
+
+The bot can append a new recurring payment via chat (`mandatory_payment_add` intent) by writing into an existing blank row inside the target section, before its `ИТОГО` row — this keeps the row inside the section's existing `SUM` range without rewriting any formula. It never inserts or shifts rows: if a section has no free row left, the write is rejected and the user is asked to add the payment manually in Excel, since inserting a row would require rewriting `SUM` ranges and any other formula that references rows below the insertion point (e.g. a grand-total row).
 
 ### `📈 Капитал` — Capital projection
 

@@ -298,3 +298,77 @@ def test_update_setting_raises_keyerror_if_missing():
             writer.update_setting("Капитал", 700000)
     finally:
         os.unlink(path)
+
+
+def test_add_mandatory_payment_writes_into_first_half_reserved_row(budget_path):
+    writer = ExcelWriter(budget_path)
+    row_num = writer.add_mandatory_payment(
+        description="Парковка", amount=5000.0, due_day=6, half="first",
+    )
+    assert row_num > 0
+
+    reader = ExcelReader(budget_path)
+    payments = reader.get_mandatory_payments()
+    parking = next(p for p in payments["first"] if p["description"] == "Парковка")
+    assert parking["amount"] == 5000.0
+    assert parking["due_day"] == 6
+    assert all(p["description"] != "Парковка" for p in payments["second"])
+
+
+def test_add_mandatory_payment_writes_into_second_half(budget_path):
+    writer = ExcelWriter(budget_path)
+    writer.add_mandatory_payment(
+        description="Подписка", amount=500.0, due_day=0, half="second",
+    )
+
+    reader = ExcelReader(budget_path)
+    payments = reader.get_mandatory_payments()
+    subscription = next(p for p in payments["second"] if p["description"] == "Подписка")
+    assert subscription["amount"] == 500.0
+    # due_day=0 must be written as an empty "~" cell, not a literal 0.
+    assert subscription["due_day"] == 0
+    assert all(p["description"] != "Подписка" for p in payments["first"])
+
+
+def test_add_mandatory_payment_does_not_touch_itogo_formula(budget_path):
+    writer = ExcelWriter(budget_path)
+    writer.add_mandatory_payment(
+        description="Такси", amount=3000.0, due_day=8, half="first",
+    )
+    wb = openpyxl.load_workbook(budget_path)
+    ws = wb["📅 Платежи"]
+    itogo_row = next(
+        r for r in range(2, ws.max_row + 1)
+        if ws.cell(r, 1).value and "ИТОГО" in str(ws.cell(r, 1).value)
+    )
+    assert ws.cell(itogo_row, 2).value == "=SUM(C4:C17)"
+    assert ws.cell(itogo_row, 3).value == "=SUM(C4:C17)"
+
+
+def test_add_mandatory_payment_raises_when_block_is_full():
+    wb = openpyxl.Workbook()
+    ws_t = wb.active
+    ws_t.title = "📋 Транзакции"
+    ws_t.append([""] * 11)
+    ws_t.append(["Дата"] + [""] * 10)
+
+    ws_pay = wb.create_sheet("📅 Платежи")
+    ws_pay.cell(2, 1).value = "Платёж / назначение"
+    ws_pay.cell(3, 1).value = "Existing"
+    ws_pay.cell(3, 2).value = 5
+    ws_pay.cell(3, 3).value = 1000
+    ws_pay.cell(4, 1).value = "ИТОГО"
+    ws_pay.cell(4, 2).value = "=SUM(C3:C3)"
+    ws_pay.cell(5, 1).value = "2️⃣  ВТОРАЯ ЗАРПЛАТА"
+    ws_pay.cell(6, 1).value = "ИТОГО"
+
+    path = tempfile.mktemp(suffix=".xlsx")
+    wb.save(path)
+    try:
+        writer = ExcelWriter(path)
+        with pytest.raises(ValueError, match="нет свободных строк"):
+            writer.add_mandatory_payment(
+                description="Новый платёж", amount=100.0, due_day=0, half="first",
+            )
+    finally:
+        os.unlink(path)

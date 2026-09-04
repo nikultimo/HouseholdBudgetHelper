@@ -62,7 +62,9 @@ Query current capital or ask for capital at a named date/month. “Баланс 
 
 ### Платежи (Payments)
 
-Ask "what do I need to pay?" → ☐ checklist from `📅 Платежи` sheet.
+Ask "what do I need to pay?" → ☐ checklist from `📅 Платежи` sheet. `День`/`Сумма` cells are parsed tolerantly (comma decimals, thousands separators, ₽/руб suffixes, like `💳 Кредиты`); a still-unparseable cell (e.g. a formula with no cached value) is skipped and logged instead of silently vanishing.
+
+Ask to add a new recurring monthly payment (`mandatory_payment_add` intent) → the bot extracts a name, amount, and either an explicit day of month or a salary half ("первая половина" / "вторая половина") and writes one row into an existing empty slot in the matching half's block of `📅 Платежи`. Example: "добавь ежемесячный платёж 5000 на парковку в первую половину месяца". Missing name/amount/timing triggers a clarification instead of a write. The bot never inserts or shifts rows or rewrites the block's `ИТОГО` formula — if a half's block has no free row, it asks the user to add the payment manually in Excel instead of risking a stale formula elsewhere in the sheet.
 
 ### Setup
 

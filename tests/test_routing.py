@@ -87,6 +87,14 @@ def test_fast_classify_ignores_no_description():
     assert _fast_classify("200") is None
 
 
+def test_fast_classify_ignores_mandatory_payment_add_phrasing():
+    # These must defer to the LLM router (mandatory_payment_add), not be
+    # fast-classified as a one-time "transaction".
+    assert _fast_classify("Добавь платёж в первую половину месяца - 5000 рублей на парковку") is None
+    assert _fast_classify("добавь ежемесячный платёж 5000 на парковку") is None
+    assert _fast_classify("новый регулярный платёж такси 3000 во вторую половину") is None
+
+
 def test_transaction_amount_detection_requires_numeric_amount():
     assert has_transaction_amount("Билет на самолёт 5000") is True
     assert has_transaction_amount("Билет на самолёт, траты") is False

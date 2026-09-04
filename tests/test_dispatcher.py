@@ -179,3 +179,25 @@ async def test_unsupported_transaction_search_requests_single_message_clarificat
     assert "одном сообщении" in reply.call_args.args[2]
     trace_ctx.set_metadata.assert_any_call("route", "transaction_search_clarification")
     trace_ctx.set_metadata.assert_any_call("answer_source", "clarification")
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_routes_to_settings_handler():
+    classification = IntentClassification(
+        intent="mandatory_payment_add",
+        extracted_value=5000.0,
+        payment_description="Парковка",
+        payment_due_day=None,
+        payment_half="first",
+    )
+    with patch("dispatcher.settings_cmd.cmd_mandatory_payment_add", new_callable=AsyncMock) as add_payment:
+        await dispatch(
+            MagicMock(), MagicMock(), classification,
+            "Добавь платёж в первую половину месяца - 5000 рублей на парковку",
+            "1", "2026-07-13", MagicMock(), **_dependencies(),
+        )
+
+    add_payment.assert_awaited_once()
+    assert add_payment.call_args.kwargs["description"] == "Парковка"
+    assert add_payment.call_args.kwargs["amount"] == 5000.0
+    assert add_payment.call_args.kwargs["half"] == "first"

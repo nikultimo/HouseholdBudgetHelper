@@ -1,7 +1,10 @@
 from __future__ import annotations
+import logging
 from datetime import date, datetime
 from typing import Any
 import openpyxl
+
+logger = logging.getLogger(__name__)
 
 from excel.constants import (
     LEDGER_COL_BALANCE_AFTER,
@@ -298,7 +301,7 @@ class ExcelReader:
         second_half: list[dict[str, Any]] = []
         current_half: list[dict[str, Any]] = first_half
         header_cols = {"Платёж / назначение", "ИТОГО", "💰", "💡"}
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             name, day, amount = row[0], row[1], row[2]
             if name is None:
                 continue
@@ -308,15 +311,21 @@ class ExcelReader:
                 continue
             if any(k in name_str for k in header_cols):
                 continue
-            if amount is None or not isinstance(amount, (int, float)):
+            amount_val = _payment_amount_cell(amount)
+            if amount_val is None:
+                if day is not None or amount is not None:
+                    # Something was entered in День/Сумма but couldn't be parsed
+                    # (e.g. a formula cell with no cached value, or stray text) —
+                    # a plain section-header row (both cells empty) stays silent.
+                    logger.warning(
+                        "%s row %d (%r): unparseable amount %r, skipping",
+                        SHEET_PAYMENTS, row_idx, name_str, amount,
+                    )
                 continue
-            try:
-                due_day = int(day) if isinstance(day, (int, float)) else 0
-            except (ValueError, TypeError):
-                due_day = 0
+            due_day = _payment_day_cell(day)
             entry = {
                 "description": name_str,
-                "amount": float(amount),
+                "amount": amount_val,
                 "due_day": due_day,
             }
             current_half.append(entry)
@@ -356,6 +365,51 @@ class ExcelReader:
     def get_summary_data(self, month: str) -> dict[str, Any]:
         txns = self.get_transactions(month=month)
         return self._summary_from_txns(txns, month)
+
+
+def _payment_amount_cell(value: Any) -> float | None:
+    """Tolerantly parse a 📅 Платежи amount cell. Returns None if unparseable.
+
+    Accepts plain numbers, and spreadsheet strings with a currency suffix
+    (₽, руб), thousands separators (spaces, NBSP), and comma decimals.
+    A formula cell without a cached value (data_only=True) reads as None
+    here and is treated as unparseable, not as zero, so it is never
+    silently dropped as a real 0 ₽ payment.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        normalized = (
+            value.strip()
+            .replace(" ", "")
+            .replace(" ", "")
+            .replace("₽", "")
+            .replace("руб.", "")
+            .replace("руб", "")
+            .replace(",", ".")
+        )
+        if not normalized:
+            return None
+        try:
+            return float(normalized)
+        except ValueError:
+            return None
+    return None
+
+
+def _payment_day_cell(value: Any) -> int:
+    """Tolerantly parse a 📅 Платежи due-day cell; defaults to 0 (unspecified)."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value)
+    if isinstance(value, str):
+        normalized = value.strip().replace(" ", "").replace(" ", "")
+        if normalized.isdigit():
+            return int(normalized)
+    return 0
 
 
 def _numeric_cell(value: Any) -> float:

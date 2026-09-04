@@ -303,6 +303,21 @@ async def dispatch(
             payment_percentages=cfg.salary_payment_percentages,
             trace_ctx=trace_ctx,
         )
+    elif intent == "mandatory_payment_add":
+        trace_ctx.set_metadata("route", "mandatory_payment_add")
+        await settings_cmd.cmd_mandatory_payment_add(
+            update,
+            context,
+            description=classification.payment_description,
+            amount=extracted,
+            due_day=classification.payment_due_day,
+            half=classification.payment_half,
+            reader=reader,
+            writer=writer,
+            yadisk=yadisk,
+            cfg=cfg,
+            trace_ctx=trace_ctx,
+        )
     elif intent == "general_financial_advice":
         await _run_agent(update, context, text, today, cfg=cfg, reader=reader, llm_client=llm_client, trace_ctx=trace_ctx)
     elif intent == "off_topic":

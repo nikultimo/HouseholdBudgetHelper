@@ -189,3 +189,125 @@ async def test_payments_checklist_records_exact_trace_reply():
 
     reply.assert_awaited_once()
     assert reply.call_args.kwargs["trace_ctx"] is trace_ctx
+
+
+def _make_cfg():
+    cfg = MagicMock()
+    cfg.salary_pay_days = (5, 20)
+    return cfg
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_asks_for_description_when_missing():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description=None, amount=5000.0, due_day=None, half="first",
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    reply.assert_awaited_once()
+    assert "название" in reply.call_args[0][2]
+    writer.add_mandatory_payment.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_asks_for_amount_when_missing():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description="Парковка", amount=None, due_day=None, half="first",
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    reply.assert_awaited_once()
+    assert "сумму" in reply.call_args[0][2]
+    writer.add_mandatory_payment.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_asks_for_timing_when_no_half_or_day():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description="Парковка", amount=5000.0, due_day=None, half=None,
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    reply.assert_awaited_once()
+    assert "Уточни" in reply.call_args[0][2]
+    writer.add_mandatory_payment.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_derives_half_from_due_day():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    writer.add_mandatory_payment.return_value = 9
+
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description="Интернет", amount=900.0, due_day=22, half=None,
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    writer.add_mandatory_payment.assert_called_once_with(
+        description="Интернет", amount=900.0, due_day=22, half="second",
+    )
+    reader.invalidate_cache.assert_called_once()
+    yadisk.upload.assert_awaited_once()
+    reply.assert_awaited_once()
+    assert "Интернет" in reply.call_args[0][2]
+    assert "900" in reply.call_args[0][2]
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_uses_explicit_half_and_succeeds():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    writer.add_mandatory_payment.return_value = 9
+
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description="Парковка", amount=5000.0, due_day=None, half="first",
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    writer.add_mandatory_payment.assert_called_once_with(
+        description="Парковка", amount=5000.0, due_day=0, half="first",
+    )
+    reply.assert_awaited_once()
+    assert "✅" in reply.call_args[0][2]
+
+
+@pytest.mark.asyncio
+async def test_mandatory_payment_add_reports_full_block_as_clarification():
+    from handlers.settings_cmd import cmd_mandatory_payment_add
+
+    reader, writer, yadisk = MagicMock(), MagicMock(), AsyncMock()
+    writer.add_mandatory_payment.side_effect = ValueError("нет свободных строк в блоке первой половины")
+
+    with patch("handlers.settings_cmd.reply_to_update", new_callable=AsyncMock) as reply:
+        await cmd_mandatory_payment_add(
+            MagicMock(), _ctx(),
+            description="Парковка", amount=5000.0, due_day=None, half="first",
+            reader=reader, writer=writer, yadisk=yadisk, cfg=_make_cfg(),
+        )
+
+    reply.assert_awaited_once()
+    assert "нет свободных строк" in reply.call_args[0][2]
+    reader.invalidate_cache.assert_not_called()
+    yadisk.upload.assert_not_awaited()
